@@ -1,0 +1,13 @@
+# Your telegram token, get from @BotFather
+telegram-token = "139282332:fake_tokenlI_dAF41rNfFsaaa2EJvwi7qL91"
+# Enabled groups, either name or id are supported
+enabled-chats = ["group_name", "-10011231232"]
+
+# # optional, proxy config, HTTP(S) and SOCKS5 are supported.
+# proxy = "http://localhost:7899"
+
+# [time]
+# # fetch updates delay
+# fetch-delay = 1000
+# # fetch delay when last fetching failed
+# failed-delay = 5000
