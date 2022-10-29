@@ -373,6 +373,7 @@ dependencies = [
  "async-stream",
  "clap",
  "clap-verbosity-flag",
+ "form_urlencoded",
  "frankenstein",
  "futures",
  "futures-util",

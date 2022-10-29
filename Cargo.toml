@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [profile.release]
-incremental = true
 opt-level = 3
 strip = "symbols"
 panic = "abort"
@@ -17,6 +16,7 @@ opt-level = "s"
 anyhow = "1.0"
 lazy_static = "1.4"
 
+form_urlencoded = "1.1"
 regex = "1"
 
 clap = { version = "4.0", features = ["derive", "cargo", "wrap_help", "env"] }

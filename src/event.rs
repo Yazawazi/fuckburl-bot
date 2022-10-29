@@ -6,7 +6,7 @@ use frankenstein::{
 };
 use log::{debug, info};
 
-use crate::{replacer::{replace_bshort, replace_btrack}, Config};
+use crate::{replacer::replace_all, Config};
 
 pub(crate) async fn process_update(
   api: &AsyncApi,
@@ -25,11 +25,14 @@ pub(crate) async fn process_update(
       } else {
         return Ok(());
       };
-      let replaced = replace_btrack(&*text);
-      let replaced = replace_bshort(&*replaced).await.context("Failed to replace short url")?;
+      let replaced = replace_all(&*text)
+        .await
+        .context("Failed to replace text")?;
       if replaced == text {
         return Ok(());
       }
+
+      info!("Replacing message {}", msg.chat.id);
 
       let resp = api
         .send_message(
