@@ -26,7 +26,7 @@ lazy_static! {
   )
   .unwrap();
   static ref TWITTER_REGEX: Regex = Regex::new(
-    r"(https?://)?(www\.)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?+://)?(www\.)?(vx)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref WEIXIN_REGEX: Regex = Regex::new(
