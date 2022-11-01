@@ -4,9 +4,8 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures::stream::{self, StreamExt};
 use regex::{Match, Regex};
-use reqwest::{IntoUrl, Url};
+use reqwest::Url;
 
 lazy_static! {
   static ref BSHORT_REGEX: Regex =
@@ -31,37 +30,53 @@ lazy_static! {
   )
   .unwrap();
   static ref WEIXIN_REGEX: Regex = Regex::new(
-    r"(?P<url>(https?://)?(www\.)?mp\.weixin\.qq\.com/s\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?://)?mp\.weixin\.qq\.com/s\??(?:&?[^=&]*=[^=&]*)*"
+  )
+  .unwrap();
+  static ref JD_REGEX: Regex = Regex::new(
+    r"(?P<url>(https?://)?item\.(m\.)?jd\.com/product/[0-9]+\.html)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
 }
 
 pub async fn replace_all(text: &str) -> Result<String> {
   let mut new = text.to_string();
-  new = replace_bshort(&*new)
+  new = replace_bshort(&new)
     .await
     .context("Failed to replace short url")?;
-  new = replace_btrack(&*new);
+  replace_btrack(&mut new);
   new = replace_barticle(&*new);
   new = replace_twitter(&*new);
   new = replace_amazon(&*new);
   new = replace_amazon_search(&*new);
-  new = replace_weixin(&new).context("Failed to replace weixin url")?;
+  new = replace_weixin(&new);
+  new = replace_jd(&new);
   Ok(new)
 }
 
 fn replace_twitter(url: &str) -> String {
-  TWITTER_REGEX.replace(url, "https://vxtwitter.com$path").into()
+  TWITTER_REGEX
+    .replace(url, "https://vxtwitter.com$path")
+    .into()
 }
 
-fn replace_weixin<P>(url: P) -> Result<String>
-where
-  P: IntoUrl,
-{
-  let mut url = url.into_url()?;
-  const KEYS: Cow<[&str]> = Cow::Borrowed(&["__biz", "mid", "idx", "sn"]);
-  url.keep_pairs_only_in(KEYS);
-  Ok(url.to_string())
+fn replace_weixin(text: &str) -> String {
+  let mut new_str = text.to_string();
+  for i in WEIXIN_REGEX.find_iter(text) {
+    let mut url = if let Ok(url) = Url::from_str(i.as_str()) {
+      url
+    } else {
+      continue;
+    };
+    const KEYS: Cow<[&str]> = Cow::Borrowed(&["__biz", "mid", "idx", "sn"]);
+    url.keep_pairs_only_in(KEYS);
+    new_str.replace_range(i.range(), url.to_string().as_str());
+  }
+  new_str
+}
+
+fn replace_jd(url: &str) -> String {
+  JD_REGEX.replace_all(url, "$url").into()
 }
 
 fn replace_amazon(url: &str) -> String {
@@ -79,25 +94,26 @@ fn trim_bili_link(url: &mut Url) {
   url.keep_pairs_only_in(KEYS);
 }
 
-fn replace_btrack(str: &str) -> String {
-  let mut new_str = str.to_string();
-  for i in BVIDEO_REGEX.find_iter(str.borrow()) {
+fn replace_btrack(text: &mut String) {
+  let mut replaces = Vec::new();
+  for i in BVIDEO_REGEX.find_iter(text) {
     let mut url = if let Ok(url) = Url::from_str(i.as_str()) {
       url
     } else {
       continue;
     };
     trim_bili_link(&mut url);
-    new_str.replace_range(i.range(), url.to_string().as_str());
+    replaces.push((i.range(), url.to_string()));
   }
-  new_str
+  for (range, str) in replaces {
+    text.replace_range(range, str.as_str());
+  }
 }
 
 async fn replace_bshort(str: &str) -> Result<String> {
   let mut new_str = str.to_string();
   let matches: Vec<Match> = BSHORT_REGEX.find_iter(str).collect();
-  let mut stream = stream::iter(matches);
-  while let Some(x) = stream.next().await {
+  for x in matches.iter() {
     let mut url = get_redirect_url(x.as_str()).await?;
     trim_bili_link(&mut url);
     new_str.replace_range(x.range(), url.to_string().as_str());
@@ -111,7 +127,7 @@ fn replace_barticle(str: &str) -> String {
     .into()
 }
 
-async fn get_redirect_url(url: &str) -> anyhow::Result<Url> {
+async fn get_redirect_url(url: &str) -> Result<Url> {
   let resp = reqwest::get(url)
     .await
     .with_context(|| format!("Failed to get url {url}"))?;
@@ -150,7 +166,7 @@ impl RemovePairsIf for Url {
 
     self.set_query(match &*ser.finish() {
       "" => None,
-      query @ _ => Some(query),
+      query => Some(query),
     });
   }
 }
@@ -161,28 +177,30 @@ mod tests {
 
   #[tokio::test]
   async fn remove_all() {
-    let result = replace_btrack("https://www.bilibili.com/video/BV1Hg411T7fT/?spm_id_from=333.788.recommend_more_video.1&vd_source=425ad7d352481d80617a03327da07da0");
-    assert_eq!("https://www.bilibili.com/video/BV1Hg411T7fT/", result);
+    let mut text = "https://www.bilibili.com/video/BV1Hg411T7fT/?spm_id_from=333.788.recommend_more_video.1&vd_source=425ad7d352481d80617a03327da07da0".to_string();
+    replace_btrack(&mut text);
+    assert_eq!("https://www.bilibili.com/video/BV1Hg411T7fT/", text);
   }
 
   #[test]
   fn keep_certain_params() {
-    assert_eq!(
-      "https://www.bilibili.com/video/BV114514/?t=123&p=1",
-      replace_btrack("https://www.bilibili.com/video/BV114514/?t=123&p=1&spm=1.2212.22321")
-    );
-    assert_eq!(
-      "https://www.bilibili.com/video/BV114514/?t=123",
-      replace_btrack("https://www.bilibili.com/video/BV114514/?t=123&spm=1.2212.22321")
-    );
+    {
+      let mut text =
+        "https://www.bilibili.com/video/BV114514/?t=123&p=1&spm=1.2212.22321".to_string();
+      replace_btrack(&mut text);
+      assert_eq!("https://www.bilibili.com/video/BV114514/?t=123&p=1", text);
+    }
+    {
+      let text = "https://www.bilibili.com/video/BV114514/?t=123&spm=1.2212.22321".to_string();
+      assert_eq!("https://www.bilibili.com/video/BV114514/?t=123", text);
+    }
   }
 
   #[tokio::test]
   async fn bshort() {
-    assert_eq!(
-      "https://www.bilibili.com/video/BV1se4y177g9/?t=100",
-      replace_bshort("https://b23.tv/lBI8Ov3").await.unwrap(),
-    );
+    let text = "https://b23.tv/lBI8Ov3".to_string();
+    replace_bshort(&text).await.unwrap();
+    assert_eq!("https://www.bilibili.com/video/BV1se4y177g9/?t=100", text);
   }
 
   #[test]
@@ -225,11 +243,20 @@ mod tests {
 
   #[test]
   fn replace_weixin_test() {
+    let text = "https://mp.weixin.qq.com/s?__biz=MzIzzMwNjc1NzU==&mid=2650309&idx=114514&sn=2fd9d2a3b0b544a6da&chksm=e8de3b77dfa9b2612b676b21f34a75a79994bfcd4a4#rd";
     assert_eq!(
       "https://mp.weixin.qq.com/s?__biz=MzIzzMwNjc1NzU%3D%3D&mid=2650309&idx=114514&sn=2fd9d2a3b0b544a6da#rd",
       replace_weixin(
-        "https://mp.weixin.qq.com/s?__biz=MzIzzMwNjc1NzU==&mid=2650309&idx=114514&sn=2fd9d2a3b0b544a6da&chksm=e8de3b77dfa9b2612b676b21f34a75a79994bfcd4a4#rd"
-      ).unwrap()
+        text
+      )
+    )
+  }
+
+  #[test]
+  fn replace_jd_test() {
+    assert_eq!(
+      "https://item.m.jd.com/product/100026923531.html",
+      replace_jd("https://item.m.jd.com/product/100026923531.html?&utm_source=iosapp&utm_medium=appshare&utm_campaign=114514&utm_term=CopyURL&ad_od=share&gx=T2nEPztRx6NTRa30RpDCM")
     )
   }
 }
