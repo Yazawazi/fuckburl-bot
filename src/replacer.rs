@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
 use regex::{Match, Regex};
-use reqwest::Url;
+use reqwest::{IntoUrl, Url};
 
 lazy_static! {
   static ref BSHORT_REGEX: Regex =
@@ -20,22 +20,48 @@ lazy_static! {
   )
   .unwrap();
   static ref AMAZON_REGEX: Regex = Regex::new(
-    r"(?P<domain>(https?://)?(www\.)?amazon.com/)[a-zA-Z0-9%-]+/(?P<path>dp/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<domain>(https?://)?(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/)[a-zA-Z0-9%-]+/(?P<path>dp/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
   ).unwrap();
   static ref AMAZON_SEARCH_REGEX: Regex = Regex::new(
-    r"(?P<domain>(https?://)?(www\.)?amazon.com/s)(?P<keyword>\?k=[a-zA-Z0-9%+-]+)(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<domain>(https?://)?(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/s)(?P<keyword>\?k=[a-zA-Z0-9%+-]+)(?:&?[^=&]*=[^=&]*)*"
+  )
+  .unwrap();
+  static ref TWITTER_REGEX: Regex = Regex::new(
+    r"(https?://)?(www\.)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+  )
+  .unwrap();
+  static ref WEIXIN_REGEX: Regex = Regex::new(
+    r"(?P<url>(https?://)?(www\.)?mp\.weixin\.qq\.com/s\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
 }
 
 pub async fn replace_all(text: &str) -> Result<String> {
   let mut new = text.to_string();
-  new = replace_bshort(&*new).await.context("Failed to replace short url")?;
+  new = replace_bshort(&*new)
+    .await
+    .context("Failed to replace short url")?;
   new = replace_btrack(&*new);
   new = replace_barticle(&*new);
+  new = replace_twitter(&*new);
   new = replace_amazon(&*new);
   new = replace_amazon_search(&*new);
+  new = replace_weixin(&new).context("Failed to replace weixin url")?;
   Ok(new)
+}
+
+fn replace_twitter(url: &str) -> String {
+  TWITTER_REGEX.replace(url, "https://vxtwitter.com$path").into()
+}
+
+fn replace_weixin<P>(url: P) -> Result<String>
+where
+  P: IntoUrl,
+{
+  let mut url = url.into_url()?;
+  const KEYS: Cow<[&str]> = Cow::Borrowed(&["__biz", "mid", "idx", "sn"]);
+  url.keep_pairs_only_in(KEYS);
+  Ok(url.to_string())
 }
 
 fn replace_amazon(url: &str) -> String {
@@ -80,7 +106,9 @@ async fn replace_bshort(str: &str) -> Result<String> {
 }
 
 fn replace_barticle(str: &str) -> String {
-  BARTICLE_REGEX.replace_all(str, "https://www.bilibili.com/read/cv$cvid").into()
+  BARTICLE_REGEX
+    .replace_all(str, "https://www.bilibili.com/read/cv$cvid")
+    .into()
 }
 
 async fn get_redirect_url(url: &str) -> anyhow::Result<Url> {
@@ -162,7 +190,11 @@ mod tests {
     assert_eq!(
       "https://www.amazon.com/dp/B00NLZUM36/",
       replace_amazon("https://www.amazon.com/Redragon-S101-Keyboard-Ergonomic-Programmable/dp/B00NLZUM36/ref=sr_1_1?keywords=gaming+keyboard&pd_rd_r=89c237af-e7f2-4af6-b9c4&pd_rd_w=0aaaD&pd_rd_wg=KZWal&pf_rd_p=112312321&pf_rd_r=1233&qid=234231231&qu=eyJxc2MiOinFzcCI6IjYuMjAifQ%3D%3D&sr=8-1"),
-    )
+    );
+    assert_eq!(
+      "https://www.amazon.co.jp/dp/B00NLZUM36/",
+      replace_amazon("https://www.amazon.co.jp/Redragon-S101-Keyboard-Ergonomic-Programmable/dp/B00NLZUM36/ref=sr_1_1?keywords=gaming+keyboard&pd_rd_r=89c237af-e7f2-4af6-b9c4&pd_rd_w=0aaaD&pd_rd_wg=KZWal&pf_rd_p=112312321&pf_rd_r=1233&qid=234231231&qu=eyJxc2MiOinFzcCI6IjYuMjAifQ%3D%3D&sr=8-1"),
+    );
   }
 
   #[test]
@@ -178,6 +210,26 @@ mod tests {
     assert_eq!(
       "https://www.bilibili.com/read/cv19172625",
       replace_barticle("https://www.bilibili.com/read/mobile/19172625?xxx=114514&asdfasdf=32394239ADSAD-12312aASDASD")
+    )
+  }
+
+  #[test]
+  fn replace_twitter_test() {
+    assert_eq!(
+      "https://vxtwitter.com/Penny_0571/status/1587323246506528769",
+      replace_twitter(
+        "https://twitter.com/Penny_0571/status/1587323246506528769?s=20&t=0Mzx3uLKTD-kygDQmaXvFq"
+      )
+    )
+  }
+
+  #[test]
+  fn replace_weixin_test() {
+    assert_eq!(
+      "https://mp.weixin.qq.com/s?__biz=MzIzzMwNjc1NzU%3D%3D&mid=2650309&idx=114514&sn=2fd9d2a3b0b544a6da#rd",
+      replace_weixin(
+        "https://mp.weixin.qq.com/s?__biz=MzIzzMwNjc1NzU==&mid=2650309&idx=114514&sn=2fd9d2a3b0b544a6da&chksm=e8de3b77dfa9b2612b676b21f34a75a79994bfcd4a4#rd"
+      ).unwrap()
     )
   }
 }
