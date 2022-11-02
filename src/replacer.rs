@@ -16,7 +16,7 @@ lazy_static! {
   )
   .unwrap();
   static ref BARTICLE_REGEX: Regex = Regex::new(
-    r"((https?://|(?<![a-zA-Z]{1})|^)(www\.)?bilibili.com/read/mobile/(?P<cvid>[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?://|(?<![a-zA-Z]{1})|^)(www\.)?bilibili.com/read/mobile/(?P<cvid>[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref AMAZON_REGEX: Regex = Regex::new(
