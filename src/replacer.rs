@@ -4,37 +4,38 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use regex::{Match, Regex};
+use fancy_regex::Regex;
+use log::error;
 use reqwest::Url;
 
 lazy_static! {
   static ref BSHORT_REGEX: Regex =
-    Regex::new(r"((https?://)?b23.tv/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*").unwrap();
+    Regex::new(r"((https?://|(?<![a-zA-Z]{1})|^)?b23.tv/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*").unwrap();
   static ref BVIDEO_REGEX: Regex = Regex::new(
-    r"(?P<url>(https?://)?(www\.)?bilibili.com/video/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<url>(https?://|(?<![a-zA-Z]{1})|^)(www\.)?bilibili.com/video/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref BARTICLE_REGEX: Regex = Regex::new(
-    r"(https?://)?(www\.)?bilibili.com/read/mobile/(?P<cvid>[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+    r"((https?://|(?<![a-zA-Z]{1})|^)(www\.)?bilibili.com/read/mobile/(?P<cvid>[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref AMAZON_REGEX: Regex = Regex::new(
-    r"(?P<domain>(https?://)?(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/)[a-zA-Z0-9%-]+/(?P<path>dp/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<domain>(https?://|(?<![a-zA-Z]{1})|^)(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/)[a-zA-Z0-9%-]+/(?P<path>dp/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
   ).unwrap();
   static ref AMAZON_SEARCH_REGEX: Regex = Regex::new(
-    r"(?P<domain>(https?://)?(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/s)(?P<keyword>\?k=[a-zA-Z0-9%+-]+)(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<domain>(https?://|(?<![a-zA-Z]{1})|^)(www\.)?amazon\.(com|co(\.[a-zA-Z]+)?)/s)(?P<keyword>\?k=[a-zA-Z0-9%+-]+)(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref TWITTER_REGEX: Regex = Regex::new(
-    r"(https?+://)?(www\.)?(vx)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?://|(?<![a-zA-Z]{1})|^)(www\.)?(vx)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref WEIXIN_REGEX: Regex = Regex::new(
-    r"(https?://)?mp\.weixin\.qq\.com/s\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?://|(?<![a-zA-Z]{1})|^)mp\.weixin\.qq\.com/s\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref JD_REGEX: Regex = Regex::new(
-    r"(?P<url>(https?://)?item\.(m\.)?jd\.com/product/[0-9]+\.html)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(?P<url>(https?://|(?<![a-zA-Z]{1})|^)item\.(m\.)?jd\.com/product/[0-9]+\.html)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
 }
@@ -63,6 +64,13 @@ fn replace_twitter(url: &str) -> String {
 fn replace_weixin(text: &str) -> String {
   let mut new_str = text.to_string();
   for i in WEIXIN_REGEX.find_iter(text) {
+    let i = match i {
+      Ok(i) => i,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
     let mut url = if let Ok(url) = Url::from_str(i.as_str()) {
       url
     } else {
@@ -97,6 +105,13 @@ fn trim_bili_link(url: &mut Url) {
 fn replace_btrack(text: &mut String) {
   let mut replaces = Vec::new();
   for i in BVIDEO_REGEX.find_iter(text) {
+    let i = match i {
+      Ok(i) => i,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
     let mut url = if let Ok(url) = Url::from_str(i.as_str()) {
       url
     } else {
@@ -112,8 +127,15 @@ fn replace_btrack(text: &mut String) {
 
 async fn replace_bshort(str: &str) -> Result<String> {
   let mut new_str = str.to_string();
-  let matches: Vec<Match> = BSHORT_REGEX.find_iter(str).collect();
+  let matches: Vec<_> = BSHORT_REGEX.find_iter(str).collect();
   for x in matches.iter() {
+    let x = match x {
+      Ok(x) => x,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
     let mut url = get_redirect_url(x.as_str()).await?;
     trim_bili_link(&mut url);
     new_str.replace_range(x.range(), url.to_string().as_str());
