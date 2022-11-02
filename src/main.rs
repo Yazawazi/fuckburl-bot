@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 mod event;
 mod replacer;
+mod util;
 
 use async_stream::stream;
 use futures::pin_mut;

@@ -6,7 +6,7 @@ use frankenstein::{
 };
 use log::{debug, info};
 
-use crate::{replacer::replace_all, Config};
+use crate::{replacer::replace_all, util::DisplayAt, Config};
 
 pub(crate) async fn process_update(
   api: &AsyncApi,
@@ -34,28 +34,15 @@ pub(crate) async fn process_update(
 
       info!("Replacing message {}", msg.chat.id);
 
+      let mut send_msg = SendMessageParams::builder()
+        .chat_id(msg.chat.id)
+        .text(format!("Send by {}:\n{replaced}", msg.from.to_at_string()))
+        .build();
+
+      send_msg.reply_to_message_id = msg.reply_to_message.map(|i| i.message_id);
+
       let resp = api
-        .send_message(
-          &SendMessageParams::builder()
-            .chat_id(msg.chat.id)
-            // .reply_to_message_id(msg.message_id)
-            .text(format!(
-              "Send by {}:\n{replaced}",
-              msg
-                .from
-                .and_then(|i| {
-                  Some(format!("@{}", i.clone().username?)).or_else(|| {
-                    Some(format!(
-                      "{} {}",
-                      i.first_name,
-                      i.last_name.unwrap_or_default()
-                    ))
-                  })
-                })
-                .unwrap_or_else(|| "Unknown".to_string())
-            ))
-            .build(),
-        )
+        .send_message(&send_msg)
         .await
         .context("Failed to send message...")?;
       debug!("{resp:?}");
