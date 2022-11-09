@@ -6,7 +6,7 @@ use frankenstein::{
 };
 use log::{debug, info};
 
-use crate::{replacer::replace_all, util::DisplayAt, Config};
+use crate::{replacer::replace_all, util::DisplayAt, Config, START_TIME};
 
 pub(crate) async fn process_update(
   api: &AsyncApi,
@@ -16,6 +16,10 @@ pub(crate) async fn process_update(
   debug!("Processing update: {}", &update.update_id);
   match update.content {
     UpdateContent::Message(msg) => {
+      debug!("Message time: {}", msg.date);
+      if msg.date < *START_TIME {
+        return Ok(());
+      }
       if !config.enabled_chats.contains(&msg.chat.id.to_string()) {
         return Ok(());
       };

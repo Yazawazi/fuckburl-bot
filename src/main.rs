@@ -26,7 +26,7 @@ use std::{
     atomic::{AtomicU32, Ordering},
     Arc,
   },
-  time::Duration,
+  time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{bail, Context, Result};
@@ -38,7 +38,7 @@ use crate::event::process_update;
 
 #[derive(Parser, Debug)]
 struct Cli {
-  #[arg(short = 'o', long, value_name = "DIR")]
+  #[arg(short = 'c', long, value_name = "DIR")]
   #[arg(value_hint = ValueHint::FilePath)]
   config_file: Option<PathBuf>,
   #[clap(flatten)]
@@ -72,10 +72,21 @@ impl Default for Time {
   }
 }
 
+lazy_static! {
+  static ref START_TIME: u64 = {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    since_the_epoch.as_secs()
+  };
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
   let args = Cli::parse();
   init_logger(args.verbose.log_level_filter());
+  info!("Start at: {:?}", *START_TIME);
   debug!("{args:?}");
   let config = init_config(args.config_file).context("Failed to init config file")?;
   let config = Arc::new(config);
