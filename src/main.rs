@@ -3,12 +3,11 @@ extern crate lazy_static;
 
 mod event;
 mod replacer;
-mod util;
 
 use async_stream::stream;
 use futures::pin_mut;
 use futures_util::stream::StreamExt;
-use log::{debug, error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter, trace};
 use log4rs::{
   append::console::ConsoleAppender,
   config::{Appender, Root},
@@ -155,7 +154,7 @@ async fn main() -> Result<()> {
         for update in updates.into_iter() {
           yield update;
         }
-        debug!("Yield updates..");
+        trace!("Yield updates..");
         tokio::time::sleep(Duration::from_millis(config.time.fetch_delay)).await;
       }
     }
@@ -232,7 +231,7 @@ fn init_config(path: Option<PathBuf>) -> Result<Config> {
           &path.to_string_lossy()
         )
       })?;
-    let config: Config = toml::from_str(&*config_str)
+    let config: Config = toml::from_str(&config_str)
       .with_context(|| format!("Failed to parse config file: {}", &path.to_string_lossy()))?;
     Ok(config)
   } else if !path.exists() {

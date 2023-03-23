@@ -7,7 +7,7 @@ edition = "2021"
 opt-level = 3
 strip = "symbols"
 panic = "abort"
-lto = "fat"
+# lto = "fat"
 
 [profile.release.package.frankenstein]
 opt-level = "s"
@@ -15,10 +15,11 @@ opt-level = "s"
 [dependencies]
 anyhow = "1.0"
 lazy_static = "1.4"
+v_htmlescape = "0.15.8"
 
 form_urlencoded = "1.1"
 regex = "1"
-fancy-regex = "0.10"
+fancy-regex = "0.11.0"
 
 clap = { version = "4.0", features = ["derive", "cargo", "wrap_help", "env"] }
 clap-verbosity-flag = "2.0"
@@ -31,7 +32,7 @@ futures = { version = "0.3" }
 futures-util = "0.3"
 
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.5"
+toml = "0.7.3"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -50,6 +51,6 @@ features = ["all_components", "pattern_encoder"]
 
 # Telegram API
 [dependencies.frankenstein]
-version = "0.20"
+version = "0.24.1"
 default-features = false
 features = ["async-http-client"]

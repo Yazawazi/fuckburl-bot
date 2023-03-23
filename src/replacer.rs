@@ -27,7 +27,7 @@ lazy_static! {
   )
   .unwrap();
   static ref TWITTER_REGEX: Regex = Regex::new(
-    r"(https?://|(?<![a-zA-Z]{1})|^)(www\.)?(vx)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
+    r"(https?://|(?<![a-zA-Z]{1})|^)(www|c\.)?(vx)?twitter\.com(?P<path>/[a-zA-Z0-9_]+/status/[0-9]+)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
   static ref WEIXIN_REGEX: Regex = Regex::new(
@@ -46,10 +46,10 @@ pub async fn replace_all(text: &str) -> Result<String> {
     .await
     .context("Failed to replace short url")?;
   replace_btrack(&mut new);
-  new = replace_barticle(&*new);
-  new = replace_twitter(&*new);
-  new = replace_amazon(&*new);
-  new = replace_amazon_search(&*new);
+  new = replace_barticle(&new);
+  new = replace_twitter(&new);
+  new = replace_amazon(&new);
+  new = replace_amazon_search(&new);
   new = replace_weixin(&new);
   new = replace_jd(&new);
   Ok(new)
@@ -57,7 +57,7 @@ pub async fn replace_all(text: &str) -> Result<String> {
 
 fn replace_twitter(url: &str) -> String {
   TWITTER_REGEX
-    .replace(url, "https://vxtwitter.com$path")
+    .replace(url, "https://c.vxtwitter.com$path")
     .into()
 }
 
