@@ -7,7 +7,7 @@ edition = "2021"
 opt-level = 3
 strip = "symbols"
 panic = "abort"
-# lto = "fat"
+lto = "thin"
 
 [profile.release.package.frankenstein]
 opt-level = "s"

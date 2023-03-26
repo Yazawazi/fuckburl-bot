@@ -62,11 +62,16 @@ pub(crate) async fn process_update(
         },
       }
 
+      writeln!(text, ":\n").unwrap();
+
+      text.push_str(&v_htmlescape::escape(&replaced).to_string());
+
       if let Some(from) = msg.forward_from {
-        text.write_str(", forwarded from ").unwrap();
+        text.push_str("\n\n<i>forwarded from ");
         write_user(&mut text, &from);
+        text.push_str("</i>");
       } else if let Some(from_chat) = msg.forward_from_chat {
-        text.write_str(", forwarded from channel ").unwrap();
+        text.push_str("\n\n<i>forwarded from channel ");
         let title = from_chat
           .title
           .map(|title| v_htmlescape::escape(&title).to_string())
@@ -88,18 +93,17 @@ pub(crate) async fn process_update(
         } else {
           text.write_str(&title).unwrap();
         }
+        text.push_str("</i>");
       } else if let Some(ref sender_name) = msg.forward_sender_name {
+        text.push_str("\n\n<i>forwarded from channel ");
         write!(
           text,
           ", forwarded from {}",
           v_htmlescape::escape(sender_name)
         )
         .unwrap();
+        text.push_str("</i>");
       }
-
-      writeln!(text, ":").unwrap();
-
-      text.push_str(&v_htmlescape::escape(&replaced).to_string());
 
       let mut send_msg = SendMessageParams::builder()
         .chat_id(msg.chat.id)

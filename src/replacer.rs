@@ -112,9 +112,7 @@ fn replace_btrack(text: &mut String) {
         continue;
       },
     };
-    let mut url = if let Ok(url) = Url::from_str(i.as_str()) {
-      url
-    } else {
+    let Ok(mut url) = Url::from_str(i.as_str()) else {
       continue;
     };
     trim_bili_link(&mut url);
