@@ -38,6 +38,12 @@ lazy_static! {
     r"(?P<url>(https?://|(?<![a-zA-Z]{1})|^)item\.(m\.)?jd\.com/product/[0-9]+\.html)\??(?:&?[^=&]*=[^=&]*)*"
   )
   .unwrap();
+  static ref XIAOHONGSHU_REGEX: Regex = Regex::new(
+    r"((https?://|(?<![a-zA-Z]{1})|^)xhslink.com/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+  ).unwrap();
+  static ref TWITTER_SHORT_REGEX: Regex = Regex::new(
+    r"((https?://|(?<![a-zA-Z]{1})|^)t\.co/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+  ).unwrap();
 }
 
 pub async fn replace_all(text: &str) -> Result<String> {
@@ -45,6 +51,12 @@ pub async fn replace_all(text: &str) -> Result<String> {
   new = replace_bshort(&new)
     .await
     .context("Failed to replace short url")?;
+  new = replace_xiaohongshu(&new)
+    .await
+    .context("Failed to replace xiaohongshu url")?;
+  new = replace_twitter_short(&new)
+    .await
+    .context("Failed to replace twitter short url")?;
   replace_btrack(&mut new);
   new = replace_barticle(&new);
   new = replace_twitter(&new);
@@ -141,6 +153,41 @@ async fn replace_bshort(str: &str) -> Result<String> {
   Ok(new_str)
 }
 
+async fn replace_xiaohongshu(str: &str) -> Result<String> {
+  let mut new_str = str.to_string();
+  let matches: Vec<_> = XIAOHONGSHU_REGEX.find_iter(str).collect();
+  for x in matches.iter() {
+    let x = match x {
+      Ok(x) => x,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
+    let mut url = get_redirect_url(x.as_str()).await?;
+    url.set_query(None);
+    new_str.replace_range(x.range(), url.to_string().as_str());
+  }
+  Ok(new_str)
+}
+
+async fn replace_twitter_short(str: &str) -> Result<String> {
+  let mut new_str = str.to_string();
+  let matches: Vec<_> = TWITTER_SHORT_REGEX.find_iter(str).collect();
+  for x in matches.iter() {
+    let x = match x {
+      Ok(x) => x,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
+    let url = get_redirect_url(x.as_str()).await?;
+    new_str.replace_range(x.range(), url.to_string().as_str());
+  }
+  Ok(new_str)
+}
+
 fn replace_barticle(str: &str) -> String {
   BARTICLE_REGEX
     .replace_all(str, "https://www.bilibili.com/read/cv$cvid")
@@ -211,7 +258,8 @@ mod tests {
       assert_eq!("https://www.bilibili.com/video/BV114514/?t=123&p=1", text);
     }
     {
-      let text = "https://www.bilibili.com/video/BV114514/?t=123&spm=1.2212.22321".to_string();
+      let mut text = "https://www.bilibili.com/video/BV114514/?t=123&spm=1.2212.22321".to_string();
+      replace_btrack(&mut text);
       assert_eq!("https://www.bilibili.com/video/BV114514/?t=123", text);
     }
   }
@@ -219,8 +267,8 @@ mod tests {
   #[tokio::test]
   async fn bshort() {
     let text = "https://b23.tv/lBI8Ov3".to_string();
-    replace_bshort(&text).await.unwrap();
-    assert_eq!("https://www.bilibili.com/video/BV1se4y177g9/?t=100", text);
+    let result = replace_bshort(&text).await.unwrap();
+    assert_eq!("https://www.bilibili.com/video/BV1se4y177g9/?t=100", result);
   }
 
   #[test]
@@ -254,7 +302,7 @@ mod tests {
   #[test]
   fn replace_twitter_test() {
     assert_eq!(
-      "https://vxtwitter.com/Penny_0571/status/1587323246506528769",
+      "https://c.vxtwitter.com/Penny_0571/status/1587323246506528769",
       replace_twitter(
         "https://twitter.com/Penny_0571/status/1587323246506528769?s=20&t=0Mzx3uLKTD-kygDQmaXvFq"
       )
@@ -278,5 +326,22 @@ mod tests {
       "https://item.m.jd.com/product/100026923531.html",
       replace_jd("https://item.m.jd.com/product/100026923531.html?&utm_source=iosapp&utm_medium=appshare&utm_campaign=114514&utm_term=CopyURL&ad_od=share&gx=T2nEPztRx6NTRa30RpDCM")
     )
+  }
+
+  #[tokio::test]
+  async fn replace_xiaohongshu_test() {
+    let text = "http://xhslink.com/8yMk6p".to_string();
+    let result = replace_xiaohongshu(&text).await.unwrap();
+    assert_eq!(
+      "https://www.xiaohongshu.com/explore/6460b865000000000703a98b",
+      result
+    )
+  }
+
+  #[tokio::test]
+  async fn replace_twitter_short_test() {
+    let text = "https://t.co/jqpeEFD8Nz".to_string();
+    let result = replace_twitter_short(&text).await.unwrap();
+    assert_eq!("https://yazawazi.moe/", result)
   }
 }
