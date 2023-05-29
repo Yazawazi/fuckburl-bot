@@ -44,6 +44,9 @@ lazy_static! {
   static ref TWITTER_SHORT_REGEX: Regex = Regex::new(
     r"((https?://|(?<![a-zA-Z]{1})|^)t\.co/[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
   ).unwrap();
+  static ref TIKTOK_SHARE_REGEX: Regex = Regex::new(
+    r"((https?://|(?<![a-zA-Z]{1})|^)(vm|vt|www)\.tiktok\.com/(t/)?[0-9a-zA-Z]+/?)\??(?:&?[^=&]*=[^=&]*)*"
+  ).unwrap();
 }
 
 pub async fn replace_all(text: &str) -> Result<String> {
@@ -183,6 +186,24 @@ async fn replace_twitter_short(str: &str) -> Result<String> {
       },
     };
     let url = get_redirect_url(x.as_str()).await?;
+    new_str.replace_range(x.range(), url.to_string().as_str());
+  }
+  Ok(new_str)
+}
+
+async fn replace_tiktok_share(str: &str) -> Result<String> {
+  let mut new_str = str.to_string();
+  let matches: Vec<_> = TIKTOK_SHARE_REGEX.find_iter(str).collect();
+  for x in matches.iter() {
+    let x = match x {
+      Ok(x) => x,
+      Err(err) => {
+        error!("Failed to find_iter: {err}");
+        continue;
+      },
+    };
+    let mut url = get_redirect_url(x.as_str()).await?;
+    url.set_query(None);
     new_str.replace_range(x.range(), url.to_string().as_str());
   }
   Ok(new_str)
@@ -343,5 +364,31 @@ mod tests {
     let text = "https://t.co/jqpeEFD8Nz".to_string();
     let result = replace_twitter_short(&text).await.unwrap();
     assert_eq!("https://yazawazi.moe/", result)
+  }
+
+  #[tokio::test]
+  async fn replace_tiktok_share_test() {
+    let text_1 = "https://www.tiktok.com/t/ZSLLFK1V4/?t=1".to_string();
+    let result_1 = replace_tiktok_share(&text_1).await.unwrap();
+    assert_eq!(
+      "https://www.tiktok.com/@omi_kim/video/7145033030191549697",
+      result_1
+    );
+
+    let text_2 = "https://vt.tiktok.com/ZSLd5tSKG/".to_string();
+    let result_2 = replace_tiktok_share(&text_2).await.unwrap();
+
+    assert_eq!(
+      "https://www.tiktok.com/@zaki_tuber/video/7234942299489291522",
+      result_2
+    );
+
+    let text_3 = "https://vm.tiktok.com/ZSeNPcNM2/".to_string();
+    let result_3 = replace_tiktok_share(&text_3).await.unwrap();
+
+    assert_eq!(
+      "https://www.tiktok.com/@kabyi_lame/video/7013423699755896070",
+      result_3
+    );
   }
 }
