@@ -60,6 +60,9 @@ pub async fn replace_all(text: &str) -> Result<String> {
   new = replace_twitter_short(&new)
     .await
     .context("Failed to replace twitter short url")?;
+  new = replace_tiktok_share(&new)
+    .await
+    .context("Failed to replace tiktok share url")?;
   replace_btrack(&mut new);
   new = replace_barticle(&new);
   new = replace_twitter(&new);
