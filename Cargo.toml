@@ -40,7 +40,7 @@ default-features = false
 features = ["rustls-tls-native-roots", "json", "gzip", "deflate", "socks"]
 
 [dependencies.tokio]
-version = "1.20"
+version = "1.24"
 default-features = false
 features = ["rt", "macros", "parking_lot"]
 
